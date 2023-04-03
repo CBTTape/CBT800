@@ -1,0 +1,180 @@
+/*Rexx- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
+/* Name: _getopt													  */
+/* Date: November 10, 2008                                            */
+/*- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
+/* Copyright (c) 2008, Enrico Sorichetti                              */
+/* All rights reserved.                                               */
+/* Full text of license in "license.txt"                              */     
+/*- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
+_getopt:
+	__debug = 0
+
+	parse source OPT_source
+	call __dbg "OPT_source"
+	
+	parse arg OPT_opts, OPT_shrt, OPT_long, OPT_args
+
+	parse var OPT_opts OPT_abbr ";" OPT_strc ";" OPT_arbf ";" OPT_arbt
+	call __dbg "OPT_opts OPT_abbr OPT_strc OPT_arbf OPT_arbt"
+
+
+	/* fixing short options */
+	OPT_shrt = translate(OPT_shrt," ",";")
+
+	/* fixing long options */
+	OPT_long = translate(OPT_long," ",";")
+
+	call __dbg "OPT_shrt OPT_long"
+
+	call __dbg "OPT_args"
+	/* fixing args for multi word parameters */
+	if	OPT_strc \= "." then do
+		f = 0
+		do	i = 1 to length(OPT_args)
+			if	substr(opt_args,i,1) = OPT_strc then ,
+				f = 1 - f 
+			OPT_arbx = verify(OPT_arbf,substr(opt_args,i,1),"M")
+
+			if	f & ,
+				OPT_arbx > 0 then ,
+				OPT_args = overlay(substr(OPT_arbt,OPT_arbx,1),OPT_args,i,1)  
+				
+/*	
+				else ,
+				if  substr(opt_args,i,1) = "-" then ,
+					OPT_args = overlay("+",OPT_args,i,1)  	
+*/
+		end
+	end
+	call __dbg "OPT_args"
+
+	/* fixing args for contiguous opt separators*/
+	OPT_args = " " || OPT_args || " "
+	OPT_argp = 1
+	do	forever		
+		OPT_argp = pos("-", OPT_args, OPT_argp)
+		if	OPT_argp = 0 then ,
+			leave
+		if	substr(OPT_args, OPT_argp-1, 1) \= " " &,
+		  	substr(OPT_args, OPT_argp-1, 1) \= "-" then ,
+			OPT_args = left(OPT_args,OPT_argp-1) || " " || substr(OPT_args,OPT_argp)
+			OPT_argp = OPT_argp + 1
+	end
+	OPT_args = space(OPT_args)
+	OPT_argc = words(OPT_args)
+
+	OPT_newargs = ""
+	OPT_newopts = ""
+	
+	OPT_argf = 0
+	OPT_flush = 0
+	do	OPT_iarg = 1 to OPT_argc
+	 	OPT_tokn = word(OPT_args,OPT_iarg)
+		
+		if	OPT_flush then do 
+			OPT_newargs = OPT_newargs || " " || OPT_tokn
+			iterate OPT_iarg
+		end
+
+		if	OPT_tokn = "--" then do
+			OPT_flush = 1
+			iterate OPT_iarg
+		end			
+		
+		if	left(OPT_tokn,2) = "--" then do
+			OPT_argf = 0
+			OPT_tokn = substr(OPT_tokn,3)
+			OPT_fleq = ( pos("=",OPT_tokn) > 0 )
+			parse var OPT_tokn OPT_wopt "=" OPT_warg
+			OPT_nfnd = 1
+			do	OPT_iopt = 1 to words(OPT_long) while(OPT_nfnd)
+				if 	abbrev(word(OPT_long,OPT_iopt),OPT_wopt,OPT_abbr) then do
+					OPT_nfnd = 0
+					OPT_newopts = OPT_newopts || " --" || strip(word(OPT_long,OPT_iopt),"t",":")
+					leave OPT_iopt
+				end
+			end
+			if	OPT_nfnd then ,
+				return "--err invalid option : --"OPT_tokn
+			if	\OPT_fleq then do
+				OPT_argf = (right(word(OPT_long,OPT_iopt),1) = ":" ) 
+				iterate OPT_iarg
+			end
+			if	OPT_warg = "" then ,
+				return "--err invalid format : --"OPT_tokn
+			OPT_newopts = OPT_newopts || " " || OPT_warg 
+			iterate OPT_iarg	
+		end
+
+		if	left(OPT_tokn,1) = "-" then do
+			TRACE "I"
+			OPT_argf = 0
+			OPT_tokn = strip(substr(OPT_tokn,2))
+			do	while OPT_tokn \= ""
+				OPT_wopt = left(OPT_tokn,1) 
+				OPT_tokn = strip(substr(OPT_tokn,2))
+				OPT_nfnd = 1
+				do	OPT_iopt = 1 to words(OPT_shrt) while(OPT_nfnd)
+					if 	abbrev(word(OPT_shrt,OPT_iopt),OPT_wopt,1) then do
+						OPT_nfnd = 0
+						OPT_newopts = OPT_newopts || " -" || strip(word(OPT_shrt,OPT_iopt),"t",":")
+						leave OPT_iopt
+					end
+				end
+				if	OPT_nfnd then ,
+					return "--err invalid option : -"OPT_wopt
+				OPT_argf = (right(word(OPT_shrt,OPT_iopt),1) = ":" ) 
+
+				if 	OPT_tokn = "" then ,
+					iterate OPT_iarg
+
+				if	OPT_argf then do
+					OPT_newopts = OPT_newopts || " " || OPT_tokn
+					OPT_argf = 0 
+					iterate OPT_iarg
+				end
+
+/*				
+				if	OPT_argf then ,
+					return "--err invalid option sequence : -"OPT_wopt"/-"OPT_tokn
+*/
+
+			end
+
+		end
+	
+		if	OPT_argf = 1 then do
+			OPT_newopts = OPT_newopts || " " || OPT_tokn
+			OPT_argf = 0
+			iterate OPT_iarg
+		end
+		else do
+			OPT_newargs = OPT_newargs || " " || OPT_tokn
+			OPT_argf = 0
+			iterate OPT_iarg
+		end
+	
+	end
+
+	OPT_result = space(OPT_newopts || " -- " || OPT_newargs) 
+
+	return OPT_result
+
+return -99
+
+/* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
+/*                                                                   */
+/* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
+__dbg:
+	if \__debug then return
+    parse arg DBG_vl
+    do i = 1 to words(DBG_vl)
+        DBG_v = strip(word(DBG_vl,i))
+        say "**DEBUG***" left(strip(""""DBG_v""" "),20,".") ||">"|| value(DBG_v) ||"<"
+    end
+    return
+return -99
+
+
+
+

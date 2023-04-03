@@ -1,0 +1,1275 @@
+#!/opt/ooRexx/bin/rexx
+/*Rexx- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
+/* Name: receive.rx													  */
+/* Date: November 10, 2008                                            */
+/*- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
+/* Copyright (c) 2008, Enrico Sorichetti                              */
+/* All rights reserved.                                               */
+/* Full text of license in "license.txt"                              */     
+/*- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
+                                           
+/*--help:start                                                        */ 
+/*1Copyright (c) 2008, Enrico Sorichetti                              */
+/*1All rights reserved.                                               */
+/*1&RECEIVE             XMI_filelist                                  */
+/*2                                                                   */
+/*1           -V        (IMMED) a bit about myself                    */
+/*1           --version (IMMED) the same                              */
+/*2                                                                   */
+
+/*1           -h        (IMMED) short help                            */
+/*1           --help    (IMMED) long help                             */
+/*2                                                                   */
+
+/*1           --mode    (KEYW) ([auto]/text/binary)                   */
+/*2                     auto will try to infer from file content      */
+/*2                        action (translate/notranslate) and suffix  */
+/*2                     *** will work for fixed length datasets only  */
+/*2                     text                                          */
+/*2                        translate and use the '.txt' suffix        */ 
+/*2                     binary  */
+/*2                        notranslate and use the '.bin' suffix      */ 
+/*2                                                                   */
+
+/*1           --suffix  (PARM) string                                 */
+/*2                        override for default suffix                */
+/*2                        .txt for text files                        */
+/*2                        .xmi for xmit files                        */
+/*2                        .obj for object decks                      */
+/*2                        .bin for binary files                      */
+/*2                                                                   */
+
+/*1           --root    (PARM) path_name                              */
+/*2                        path to prepend to dest                    */
+/*2                                                                   */
+
+/*1           --dest    (KEYW/PARM) (junk/[name]/real)/path_name      */
+/*2                     where to expand the source(XMI) content       */
+/*2                     junk                                          */
+/*2                        at the same level of the source(XMI) file  */
+/*2                     name                                          */
+/*2                        a path with the name of the XMI container  */
+/*2                        ( cbt006.xmi ==> cbt006/)                  */                   
+/*2                     real                                          */
+/*2                        a path with the real name of XMI dataset   */
+/*2                        ( cbt006.xmi ==> cbt.cbt471.file006.pds/ ) */                   
+/*2                     path_name                                     */
+/*2                        the name tells                             */
+/*2                                                                   */
+
+/*1           --mail    (KEYW) (show/save/[name]/real)                */
+/*2                     how to process the message file               */
+/*2                     show                                          */
+/*2                       display only                                */
+/*2                     save                                          */
+/*2                       to "unxmit_mail.txt" in the dest. path      */
+/*2                     name                                          */
+/*2                        ( cbt006.xmi ==> cbt006.mail.txt)          */                   
+/*2                     real                                          */
+/*2                        ( ...==> cbt.cbt471.file006.pds.mail.txt ) */                   
+/*2                                                                   */
+
+/*1           --ispf    (KEYW) (show/save/[name]/real)                */
+/*2                     how to process the ISPF statistics            */
+/*2                     show                                          */
+/*2                       display only                                */
+/*2                     save                                          */
+/*2                       to "unxmit_ispf.txt" in the dest. path      */
+/*2                     name                                          */
+/*2                        ( cbt006.xmi ==> cbt006.ispf.txt)          */                   
+/*2                     real                                          */
+/*2                        ( ...==> cbt.cbt471.file006.pds.ispf.txt ) */  
+/*1                     *** not implemented yet ***                   */                 
+/*2                                                                   */
+
+/*1           --case    (KEYW) ([lower]/upper)                        */
+/*2                     recasing for output paths and files           */
+/*1                     *** not implemented yet ***                   */
+/*2                                                                   */
+
+/*1           -M                                                      */
+/*1           --member  (PARM) string                                 */
+/*2                        members to extracted                       */
+/*2                        the option can be repeated as needed       */
+/*2                        can be  a simple pattern like pref*        */
+/*1                     *** not implemented yet ***                   */
+/*2                                                                   */
+
+/*1           --dump    (FLAG)                                        */
+/*2                        hex dump of the control and data records   */
+/*2                     *** no extraction will take place ***         */
+/*2                                                                   */
+
+/*1           --info    (FLAG)                                        */
+/*2                        display the INMRxx keys and values         */
+/*2                     *** no extraction will take place ***         */
+/*2                                                                   */
+
+/*1           --list    (FLAG)                                        */
+/*2                        only list the PDS members                  */
+/*2                     *** no extraction will take place ***         */
+/*2                                                                   */
+
+/*--help:end                                                          */
+
+Trace "O"
+
+__sdate = date()
+__stime = time()
+__elaps = time("E")
+
+__error		= 0
+__abort		= 0
+__debug		= 0
+__trace 	= 0
+__msglevl	= 0 
+
+call		__setup
+
+/* to have a single executable delete the following                   */
+/* and copy at the end of the script                                  */
+/* _e2a.rxm                                                           */
+/* _getopt.rxm                                                        */
+/* _spfstats.rxm                                                      */
+/* delete the duplicate __dbg procedure                               */ 
+ 
+/* delete/comment/uncomment start                                     */
+__maclist 	= "_e2a _getopt _spfstats"
+__macsuff	= ".rxm"
+do	i	= 1 to words(__maclist)
+	m	= word(__maclist,i)
+	zrc	= SysAddRexxMacro(m,_mypath || "/" || m || __macsuff)
+	if	zrc \= 0 then do
+		say "***** '"m".rxm' not found for '"m"' "
+		__error = 1
+	end
+end
+if	__error then do
+	say	"***** terminating due to SysAddRexxMacro Failure *****"
+	exit
+end
+/* delete/comment/uncomment end                                       */
+
+__strch     = "."
+__arbfr		= " -"
+__arbto     = "fffe"x
+parse arg __stdargs
+__stdargs = strip(__stdargs)
+__optopts = "3;"__strch";"__arbfr";"__arbto
+__optshrt = "h;V;M:"
+__optlong = "help;version;msglevel:;mode:;suffix:;root:;dest:;mail:;ispf:;case:;member:;dump;info;list;"
+args      = _getopt( __optopts, __optshrt, __optlong, __stdargs )
+argc      = words(args)
+if	lower(left(args,5)) = "--err" then do
+	call __log 0, args
+	exit 
+end
+
+_msgl_		= 0
+
+_mode_		= "auto"
+_MODEsave_  = _mode_
+_asis_		= "."
+_ASISsave_  = _asis_
+_suff_		= "."
+_SUFFsave_	= _suff_
+
+_root_		= ""
+
+_dest_		= "name"
+
+_mail_		= "name"
+__MAILfile  = "unxmit_mail.txt" 
+__MAILsuff  = ".mail.txt" 
+
+_ispf_		= "name"
+__ISPFfile  = "unxmit_ispf.txt" 
+__ISPFsuff  = ".ispf.txt" 
+
+_case_		= "lower"
+
+_mbrs_		= ""
+
+__dump		= 0 
+__info 		= 0
+__list 		= 0
+
+__extract	= 1
+
+do iarg = 1 to argc while ( word(args,1) \= "--" )
+	optchar = word(args,1); optarg  = word(args,2);
+
+	if  optchar = "-V" | , 
+		optchar = "--version" then ,
+		call __ver 
+
+	if  optchar = "-h" then ,
+		call __HLP 1
+	if optchar = "--help" then ,
+		call __HLP 2
+
+	if	optchar = "--msglvl" then do
+		if	left(optarg,1) = "-" then do
+			call __log 0, "getopt: option requires an argument : "optchar 
+			exit 
+		end
+		_msgl_ = optarg
+		if	datatype(_msgl_) \= "NUM" then do
+			call __log 0, "message level not numeric or invalid: "_msgl_ 
+			exit 
+		end
+		if  _msgl_ < 0 | ,
+			_msgl_ > 9 then  do 
+			call __log 0, "message level not numeric or invalid: "_msgl_ 
+			exit 
+		end
+		_msgl_ = _msgl_ % 1
+		args   = delword(args, 1, 2)
+		iterate iarg
+	end
+
+	if	optchar = "--mode" then do
+		if	left(optarg,1) = "-" then do
+			call __log 0, "getopt: option requires an argument : "optchar 
+			exit 
+		end
+		_mode_ = lower(optarg)
+		if wordpos(_mode_,"auto text binary") = 0 then do
+			call __log 0, "invalid mode option '"_mode_"' (auto/text/binary)"
+			exit 
+		end
+		args   = delword(args, 1, 2)
+		iterate iarg
+	end
+
+	if	optchar = "--suffix" then do
+		if	left(optarg,1) = "-" then do
+			call __log 0, "getopt: option requires an argument : "optchar 
+			exit 
+		end
+		_suff_ = lower(optarg)
+		args   = delword(args, 1, 2)
+		iterate iarg
+	end
+
+	if	optchar = "--root" then do
+		if	left(optarg,1) = "-" then do
+			call __log 0, "getopt: option requires an argument : "optchar 
+			exit 
+		end
+		_root_	= lower(optarg)
+		args	= delword(args, 1, 2)
+		iterate iarg
+	end
+
+	if	optchar = "--dest" then do
+		if	left(optarg,1) = "-" then do
+			call __log 0, "getopt: option requires an argument : "optchar 
+			exit 
+		end
+		_dest_	= lower(optarg)
+		args	= delword(args, 1, 2)
+		iterate iarg
+	end
+
+	if	optchar = "--mail" then do
+		if	left(optarg,1) = "-" then do
+			_mail_ = "name"
+			args   = delword(args, 1, 1)
+			iterate iarg
+		end
+		_mail_ = lower(optarg)
+		if wordpos(_mail_,"show save name real ") = 0 then do
+			call __log 0, "invalid mail option '"_mail_"' (show/save/name/real)"
+			exit 
+		end
+		args   = delword(args, 1, 2)
+		iterate iarg
+	end
+
+	if	optchar = "--ispf" then do
+		if	left(optarg,1) = "-" then do
+			_ispf_ = "name"
+			args   = delword(args, 1, 1)
+			iterate iarg
+		end
+		_ispf_ = optarg
+		if wordpos(_ispf_,"show save name real") = 0 then do
+			call __log 0, "invalid ispf option '"_ispf_"' (show/save/name/real)"
+			exit 
+		end
+		args   = delword(args, 1, 2)
+		iterate iarg
+	end
+
+	if	optchar = "--case" then do
+		if	left(optarg,1) = "-" then do
+			call __log 0, "getopt: option requires an argument : "optchar 
+			exit 
+		end
+		_case_ = lower(optarg)
+		if wordpos(_cas_,"lower upper asis") = 0 then do
+			call __log 0, "invalid case option '"_case_"' (lower/upper/asis)"
+			exit 
+		end
+		args   = delword(args, 1, 2)
+		iterate iarg
+	end
+
+	if	optchar = "-M" | ,
+		optchar = "--member" then do
+		if	left(optarg,1) = "-" then do
+			call __log 0, "getopt: option requires an argument : "optchar 
+			exit 
+		end
+		_mbrs_ = _mbrs_ || " " || lower(optarg)
+		args   = delword(args, 1, 2)
+		iterate iarg
+	end
+
+	if	optchar = "--dump" then do
+		__dump = 1
+		__extract = 0
+		args   = delword(args, 1, 1)
+		iterate iarg
+	end
+
+	if  optchar = "--info" then do
+		__info = 1
+		__extract = 0
+		args   = delword(args, 1, 1)
+		iterate iarg
+	end
+
+	if	optchar = "--list" then do
+		__list = 1
+		__extract = 0
+		args   = delword(args, 1, 1)
+		iterate iarg
+	end
+
+	call __log 0, "****************************"
+	call __log 0, "Should not occur args      >"args"<" 
+	call __log 0, "Should not occur argc      >"argc"<" 
+	call __log 0, "Should not occur iarg      >"iarg"<" 
+	call __log 0, "Should not occur optchar   >"optchar"<" 
+	call __log 0, "Should not occur optarg    >"optarg"<" 
+	call __log 0, "****************************"
+	exit  
+
+end
+args = space(delword(args, 1, 1))
+argc = words(args)
+
+/* --msglevel _msgl_ */
+__msglevl	= _msgl_
+
+/* --mode     _mode_ */
+__MODEsave_ = _mode_ 
+_asis_ = word(".    0    1"   ,wordpos(_mode_,"auto text binary"))
+
+/* --suffix   _suff_ */
+if	_suff_ \= "." then do
+	if	_mode_  = "auto" then do
+		call __log 0, "suffix '"_suff_"' conflicts with mode '"_mode_"' "
+		exit 
+	end
+	else ,
+		_suff_ = "." || lower(strip(_suff_,,"."))
+end
+else ,
+	_suff_ = word(".    .txt .bin",wordpos(_mode_,"auto text binary"))
+
+/* --root     _root_ */
+if	_root_ \= "" then ,
+	_root_= strip(_root_,,__PSEP__) || __PSEP__
+
+if	argc = 0 then do
+	call __log 0, "needs an argument! "
+	call __hlp 1 
+end
+
+temp = args
+args = ""
+do	i = 1 to words(temp)
+	argw = word(temp,i)
+	if	wordpos(argw,args) > 0 then ,
+		iterate
+	args = args argw
+end
+args = space(args)
+argc = words(args)
+drop temp
+
+call __log 0,  left("Started",15)":" __sdate __stime 
+
+if	__dump then ,
+	call __log 0, "'--dump' specified, all other options will be ignored"
+else ,
+if	__info then ,
+	call __log 0, "'--info' specified, all other options will be ignored"
+else ,
+if	__list then ,
+	call __log 0, "'--list' specified, all other options will be ignored"
+
+__XMIheadr	= "E0C9D5D4D9F0F1"x 
+__POEheadr  = "01CA6D0F"x 
+__PDSheadr  = "00CA6D0F"x 
+__R1offset	= 2
+__R2offset	= 12
+
+__ESDheadr	= "02C5E2C4"x
+__TXTheadr	= "02E3E7E3"x
+__RLDheadr_ = "02D9D3C4"x 
+__ENDheadr  = "02C5D5C4"x
+
+__TXTsuffx	= ".txt"
+__BINsuffx	= ".bin"
+__XMIsuffx	= ".xmi"
+__OBJsuffx	= ".obj"
+
+_MODEsave_  = _mode_
+_ASISsave_  = _asis_
+_SUFFsave_	= _suff_
+
+do iarg = 1 to argc 
+
+	_MODE_  = _modesave_
+	_ASIS_  = _asissave_
+	_SUFF_	= _suffsave_
+
+
+	fxmit = strip(word(args,iarg))
+
+	p = lastpos(__PSEP__,fxmit)
+	interpret "parse var fxmit with 1 xpath "p" . "p+1" xname"
+	parse var xname  xname "." .
+	if	stream(fxmit,"c","query exists") = "" then do
+		if pos(".",fxmit) = 0 then do
+			fxmit = fxmit || ".xmi"
+			if	stream(fxmit,"c","query exists") = "" then do
+				call __log 0,  "XMI file :"fxmit "for" strip(word(args,iarg)) "not found" 
+				iterate iarg
+			end
+		end
+		else do
+			call __log 0,  "XMI file :"fxmit "not found" 
+			iterate iarg
+		end
+	end
+	if	stream(fxmit,"c","open read") \= "READY:" then do
+		call __log 0,  "error opening :"fxmit 
+		iterate iarg
+	end
+
+	headr = charin(fxmit,2,7)
+	call stream fxmit, "c", "close " 
+	if headr \= __XMIheadr then do
+		call __log 0,  "not a valid XMIT file :"fxmit
+		iterate iarg
+	end
+	if	stream(fxmit,"c","open read") \= "READY:" then do
+		call __log 0,  "error on 2nd open of :"fxmit 
+		iterate iarg
+	end
+
+	call __log 0
+	call __log 0,  left("processing",15) || ":" fxmit
+
+	call 	inminit
+
+	__init 	= 0
+
+	__open 	= 0
+	xfseq	= 0
+	fname	= ""
+
+	__skip	= 0
+
+	__HAVEpath	= 0
+	path		= ""
+	
+	do	iget = 1 while ( chars(fxmit) > 0 )  
+		xbuff = xfget(fxmit)
+		xflag = substr(xbuff,1,1)
+
+		if 	'20'x = bitand(xflag,'20'x) then do
+			__open	= 0 
+			__init	= 0
+			if 	fname \= "" then do
+				call 	stream fname, "c", "close " 
+				call __log 0, left(mbr,15)"records("right(recs,8)") file("fname")"  
+				__open = 0
+				mbr   = ""
+				fname = ""
+				recs  = 0
+			end
+
+			if	__dump then ,
+				call EBCdump xbuff		
+
+			xtype = _e2a(substr(xbuff, 2, 6))
+			if	xtype 	= "INMR01" then do
+				inmr01c	= inmr01c + 1
+				i		= inmr01c
+				list 	= ""
+				xbuff	= substr(xbuff, 8 )
+				call 	process_INMR01_03
+			end
+			else ,
+			if 	xtype 	= "INMR02" then do
+				inmr02c	= inmr02c + 1
+				i		= inmr02c
+
+				inmr02.i.inmfseq = c2d(substr(xbuff, 8, 4))
+
+				list	= "INMR02." || i || ".inmfseq"
+				xbuff	= substr(xbuff,12)
+				call 	process_INMR01_03
+				if	inmr02.i.inmdsorg = "?" then do
+					call __log 0, left(" ",20) || ": " || "dsorg(" || c2x(dsorg) || ") not supp."
+					__skip = 1
+				end	
+				if	inmr02.i.inmrecfm = "?" then do
+					call __log 0, left(" ",20) || ": " || "recfm(" || c2x(recfm) || ") not supp."
+					__skip = 1	
+				end	
+			end
+			else ,
+			if	xtype	= "INMR03" then do
+				xfseq	= xfseq + 1
+				if	xfseq \= INMR02.xfseq.inmfseq then do
+					call __log 0,"** logic error ** at line 0480"
+					exit
+				end
+
+				__init 	= 0
+				__open 	= 0
+				if __extract then ,
+				if	__HAVEpath	= 0 then do
+					do	i = 1 to inmr02c
+						if	symbol("INMR02."i."inmdsnam") = "VAR" then do
+							rname = inmr02.i.inmdsnam
+
+							if	inmr02.i.inmrecfm = "V" & ,
+								inmr02.i.inmdsorg = "PO" then do
+								_mode_ = "text"
+								_asis_ = 0
+								_suff_ = __TXTsuffx
+								call __log 0, "text mode forced for 'RECFM=V' dataset" rname
+							end
+							
+							if	_dest_ = "junk" then , 
+								path = _root_ 
+							else ,
+							if	_dest_ = "name" then , 
+								path = _root_ || xname
+							else ,
+							if	_dest_ = "real" then , 
+								path = _root_ || inmr02.i.inmdsnam
+							else ,
+								path = _dest_
+							if	\__skip &,
+								path \= "" then do
+								path = strip(path,"T",__PSEP__) 
+								if	__UNIX__ then do
+									"mkdir -p    '"path"' "
+								end
+								else ,
+									"mkdir       " path
+								path = path || __PSEP__
+							end
+							__HAVEpath	= 1
+							leave i
+						end
+					end
+				end
+
+				inmr03c	= inmr03c + 1
+				i		= inmr03c
+				list 	= ""
+				xbuff	= substr(xbuff, 8 )
+				call 	process_INMR01_03
+				iterate iget
+			end
+			
+			call process_INMR04_08
+
+			if	xtype = "INMR06" then ,
+				leave iget
+
+			iterate iget
+		end
+
+		if	__dump then 
+			call EBCdump xbuff	
+	
+		if	__dump | ,
+			__info then ,
+			iterate iget
+
+		if	__skip then ,
+			iterate iget
+		
+		if	\__init then ,
+			call xinit
+
+		if	__skip then ,
+			iterate iget
+
+		if	\__open then ,
+			call xopen
+
+		if	__skip then ,
+			iterate iget
+
+		call xfput		
+	
+	end
+
+	call stream fxmit, "c", "close" 
+
+end
+
+__edate = date()
+__etime = time()
+__elaps = time("E")
+parse var __elaps secs "." usec
+call __log 0
+call __log 0,  left("ended"         ,15) || ":" __edate __etime "elapsed :" secs%60":"secs//60"."usec
+
+exit 
+
+
+/*- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
+/*                                                                    */
+/*- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
+__dbg:
+	if \__debug then return
+    parse arg DBG_vl
+    do i = 1 to words(DBG_vl)
+        DBG_v = strip(word(DBG_vl,i))
+        say "**DEBUG**" left(strip(""""DBG_v""" "),20,".") ||">"|| value(DBG_v) ||"<"
+    end
+    return
+return -99
+
+
+/*- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
+/*                                                                    */
+/*- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
+__log: 
+	_logfile_ = ""
+	if	arg(1) > __msglevl then ,
+		return
+	if arg() = 2 then ,
+		call lineout _logfile_, left(_myname, 10) || "- " || strip(arg(2),"T")
+	else ,
+		call lineout _logfile_, ""
+	return
+
+return -99
+
+/*- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
+/*                                                                    */
+/*- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
+__ver:
+	call __log 0, left("name",11)":" _myname
+	call __log 0, left("source path",11)":" _mypath
+	call __log 0, left("source name",11)":" _myself
+	call __log 0, left("version",11)":" "("_myvers")" _mystmp
+	call __log 0, "(c) copyright Enrico Sorichetti, 2008"
+	call __log 0, left("REXX vers.",11)":" _RXvers 
+	exit 0
+
+return -99
+
+/*- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
+/*                                                                    */
+/*- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
+__hlp:
+	HLP_mode = arg(1)
+	HLP_flag = 0
+	do	i = 1 to sourceline()
+		HLP_line = sourceline(i)
+		if	strip(HLP_line) = "" then ,
+			iterate
+		HLP_line = strip(strip(strip(HLP_line),,"/"),,"*") 
+		if	strip(HLP_line) = "--help:end" then ,
+			leave
+		if	strip(HLP_line) = "--help:start" then do
+			HLP_flag = 1 
+			iterate i
+		end
+		if	\HLP_flag then ,
+			iterate i
+		parse var HLP_line with 1 HLP_levl 2 HLP_line
+		if	HLP_levl > HLP_mode then ,
+			iterate 
+		call __log 0, strip(HLP_line,"T")
+	end
+	exit 0
+
+return -99
+
+
+
+/*- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
+/*                                                                    */
+/*- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
+__setup:
+
+
+	/* collect some info about myself */
+	parse version _version_
+	_RXvers = word(_version_,1)
+	_RXvers = _version_
+
+	parse source  _source_
+	parse var _source_ __opsys __envir _commnd_ .
+	__opsys = lower(__opsys)
+	if	abbrev(__opsys,"windows") then do 
+		__PSEP__	= "\"
+		__UNIX__	= 0
+	end
+	else do
+		__PSEP__	= "/"	 
+		__UNIX__	= 1
+	end
+	p 			= lastpos(__PSEP__,_commnd_)
+	interpret	"parse var _commnd_ with 1 _mypath "p" . "p+1" _myself"
+	parse 		var _myself  _myname "." _myextn
+	_myvers 	= "01.00"
+	_mystmp 	= stream(_commnd_,"c","query datetime")
+	return
+
+return -99
+
+/*- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
+/*                                                                    */
+/*- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
+inminit:
+	drop	inmr01.
+	drop	inmr02.
+	drop	inmr03.
+	drop	inmr04.
+	drop	inmr05.
+	drop	inmr06.
+	drop	inmr07.
+	drop	inmr08.
+	drop	__MBR__.
+	drop	__SPF__.
+
+
+	inmr01c = 0 ; inmr01.0 = 0 ;list01  = ""
+	inmr02c = 0 ; inmr02.0 = 0 ;list02  = ""
+	inmr03c = 0 ; inmr03.0 = 0 ;list03  = ""
+	inmr04c = 0 ; inmr04.0 = 0 ;list04  = ""
+	inmr05c = 0 ; inmr05.0 = 0 ;list05  = ""
+	inmr06c = 0 ; inmr06.0 = 0 ;list06  = ""
+	inmr07c = 0 ; inmr07.0 = 0 ;list07  = ""
+	inmr08c = 0 ; inmr08.0 = 0 ;list08  = ""
+
+	inmtokn.1  = '0001'x; inmname.1  = "inmddnam"; inmconv.1   = "c";
+	inmtokn.2  = '0002'x; inmname.2  = "inmdsnam"; inmconv.2   = "c";
+	inmtokn.3  = '0003'x; inmname.3  = "inmmembr"; inmconv.3   = "c";
+	inmtokn.4  = '000B'x; inmname.4  = "inmsecnd"; inmconv.4   = "d";
+	inmtokn.5  = '000C'x; inmname.5  = "inmdir"  ; inmconv.5   = "d";
+	inmtokn.6  = '0022'x; inmname.6  = "inmexpdt"; inmconv.6   = "c";
+	inmtokn.7  = '0028'x; inmname.7  = "inmterm" ; inmconv.7   = "c";
+	inmtokn.8  = '0030'x; inmname.8  = "inmblksz"; inmconv.8   = "d";
+	inmtokn.9  = '003C'x; inmname.9  = "inmdsorg"; inmconv.9   = "x";
+	inmtokn.10 = '0042'x; inmname.10 = "inmlrecl"; inmconv.10  = "d";
+	inmtokn.11 = '0049'x; inmname.11 = "inmrecfm"; inmconv.11  = "x";
+	inmtokn.12 = '1001'x; inmname.12 = "inmtnode"; inmconv.12  = "c";
+	inmtokn.13 = '1002'x; inmname.13 = "inmtuid" ; inmconv.13  = "c";
+	inmtokn.14 = '1011'x; inmname.14 = "inmfnode"; inmconv.14  = "c";
+	inmtokn.15 = '1012'x; inmname.15 = "inmfuid" ; inmconv.15  = "c";
+	inmtokn.16 = '1020'x; inmname.16 = "inmlref" ; inmconv.16  = "c";
+	inmtokn.17 = '1021'x; inmname.17 = "inmlchg" ; inmconv.17  = "c";
+	inmtokn.18 = '1022'x; inmname.18 = "inmcreat"; inmconv.18  = "c";
+	inmtokn.19 = '1023'x; inmname.19 = "inmfvers"; inmconv.19  = "c";
+	inmtokn.20 = '1024'x; inmname.20 = "inmftime"; inmconv.20  = "c";
+	inmtokn.21 = '1025'x; inmname.21 = "inmttime"; inmconv.21  = "c";
+	inmtokn.22 = '1026'x; inmname.22 = "inmfack" ; inmconv.22  = "c";
+	inmtokn.23 = '1027'x; inmname.23 = "inmerrcd"; inmconv.23  = "c";
+	inmtokn.24 = '1028'x; inmname.24 = "inmutiln"; inmconv.24  = "c";
+	inmtokn.25 = '1029'x; inmname.25 = "inmuserp"; inmconv.25  = "c";
+	inmtokn.26 = '102A'x; inmname.26 = "inmrecct"; inmconv.26  = "c";
+	inmtokn.27 = '102C'x; inmname.27 = "inmsize" ; inmconv.27  = "d";
+	inmtokn.28 = '102F'x; inmname.28 = "inmnumf" ; inmconv.28  = "d";
+	inmtokn.29 = '8012'x; inmname.29 = "inmtype" ; inmconv.29  = "x";
+
+	inmkeys		= 29
+
+	inmdsnam_	= '0002'x
+	inmdsorg_	= '003C'x
+	inmrecfm_	= '0049'x
+
+	inmutiln_	= '1028'x	
+
+	return
+
+return
+
+/*- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
+/*                                                                    */
+/*- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
+xfget: 
+	bleng = charin(fxmit,,1)
+	bflag = charin(fxmit,,1)
+	buffr = bflag || Charin(fxmit,,c2d(bleng)-2)
+
+	do  while '00'x = Bitand(bflag,'40'x)
+		bleng = charin(fxmit,,1)
+		bflag = charin(fxmit,,1)
+		buffr = buffr || Charin(fxmit,,c2d(bleng)-2)
+	end
+    return buffr
+return -1
+
+/*- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
+/*                                                                    */
+/*- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
+process_INMR04_08:
+	if __info then do
+		call __log 0, copies("- ",30)
+		call __log 0, lower(xtype) 
+	end
+	return
+return -1
+
+/*- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
+/*                                                                    */
+/*- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
+process_INMR01_03:
+	do while ( length(xbuff)  > 0 )
+		next = inmkey(xbuff)
+		nfnd = 1
+		select
+			when tokn = inmdsorg_ then do
+				dsorg = substr(value.1,1,1)
+				if dsorg = '02'x then ,
+					call value xtype"."i".inmdsorg" , "PO"
+				else ,
+				if dsorg = '40'x then ,
+					call value xtype"."i".inmdsorg" , "PS"
+				else ,
+					call value xtype"."i".inmdsorg" , "?"
+				list = strip(list) || " " || xtype"."i".inmdsorg"
+				nfnd = 0
+			end
+
+			when tokn = inmrecfm_ then do
+				recfm = substr(value.1,1,1)
+				if	bitand(recfm,'C0'x) = 'C0'x then ,
+					call value xtype"."i".inmrecfm" , "?"
+				else ,
+				if	bitand(recfm,'80'x) = '80'x then ,
+					call value xtype"."i".inmrecfm" , "F"
+	 			else ,
+				if	bitand(recfm,'40'x) = '40'x then ,
+					call value xtype"."i".inmrecfm" , "V"
+				else ,
+					call value xtype"."i".inmrecfm" , "?"
+				list = strip(list) || " " || xtype"."i".inmrecfm"
+				nfnd = 0
+			end
+
+			when tokn = inmdsnam_ then do
+				dsnam =  _e2a(value.1)
+				do	v = 2 to value.0
+					dsnam =	dsnam || "." || _e2a(value.v)
+				end
+				dsnam	= lower(dsnam)
+				call value xtype"."i".inmdsnam", dsnam 
+				list = strip(list) || " " || xtype"."i".inmdsnam"
+				nfnd = 0
+			end
+
+			otherwise ,
+				do	k = 1 to inmkeys
+					if	tokn = inmtokn.k then do
+						nfnd = 0
+						knam  = xtype"."i"."inmname.k
+						list  = strip(list) || " " || knam
+						if	value.0 = 0 then ,
+							kval = ""
+						else,
+						if 	inmconv.k = "d" then ,
+							kval = c2d(value.1)
+						else ,
+						if	inmconv.k = "x" then ,
+							kval = c2x(value.1)
+						else ,
+							kval = _e2a(value.1)
+						interpret knam "= '"kval"'"
+						leave
+					end
+				end
+		end
+		if nfnd then ,
+			call __log 0, xtype "unsupported key" c2x(substr(xbuff, 3+1,16))
+
+		xbuff = substr(xbuff,next)
+	end
+
+	if __info then do
+		call __log 0, copies("- ",30)
+		call __log 0, xtype i
+		do v = 1 to words(list)
+			knam = word(list,v)
+			kval = value(word(list,v))
+ 			call __log 0, left(knam,20) || "=" kval
+		end
+	end
+	return
+
+return -99
+
+/*- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
+/*                                                                    */
+/*- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
+inmkey: 
+	tokn	= substr(xbuff,1  ,2)
+	coun    = c2d(substr(xbuff,1+2,2))
+	value.0 = coun
+	wptr	= 5
+	do 	v = 1 to coun
+		wlen 	= c2d(substr(xbuff,wptr  ,2))
+        value.v =     substr(xbuff,wptr+2,wlen)
+        wptr 	= wptr + wlen + 2
+    end
+	return wptr
+
+/*- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
+/*                                                                    */
+/*- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
+EBCdump: 
+    parse		arg EBC_buffr 
+	EBC_fillr	= copies(" ",7)
+	EBC_delta	= 1
+	say EBC_fillr || ">>" || copies("1234567890",8) || "<<"
+	do  while ( EBC_buffr \= "" ) 
+		parse var EBC_buffr with 1 EBC_chunk 81 EBC_buffr
+		say	left(right(EBC_delta,6),7) || ">>" || _e2a(EBC_chunk) || "<<"	 
+		EBC_chunk = c2x(EBC_chunk)
+		EBC_line0 = ""
+		EBC_line1 = ""
+		do	i = 1 to length(EBC_chunk) - 1 by 2
+			EBC_line0 = EBC_line0 || substr(EBC_chunk, i    , 1 ) 
+			EBC_line1 = EBC_line1 || substr(EBC_chunk, i + 1, 1 ) 
+		end
+		say EBC_fillr || ">>" || EBC_line0 || "<<"
+		say EBC_fillr || ">>" || EBC_line1 || "<<"
+		say
+		EBC_delta = EBC_delta + 80 	
+	end
+	return
+return -1
+
+/*- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
+/*                                                                    */
+/*- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
+xinit:
+	__init	= 1
+	if	inmr02.xfseq.inmutiln = "INMCOPY" then do
+		if	inmr02.xfseq.inmdsorg \= "PS" then do
+			call __log 0, "xinit: mismatched utilid:" xfseq inmr02.xfseq.inmutiln
+			call __log 0, "                  dsorg :" xfseq inmr02.xfseq.inmdsorg
+			__skip = 1
+			return
+		end
+		return 0
+	end
+	else ,
+	if	inmr02.xfseq.inmutiln = "IEBCOPY" then do
+		if	inmr02.xfseq.inmdsorg \= "PO" then do
+			call __log 0, "xinit: mismatched utilid:" xfseq inmr02.xfseq.inmutiln
+			call __log 0, "                  dsorg :" xfseq inmr02.xfseq.inmdsorg
+			__skip = 1
+			return
+		end
+		/* IEBCOPY first control record */	
+		__R1offset = 2	
+		if	substr(xbuff, __R1offset, 4) \= __PDSheadr  then do
+			call __log 0, "xinit: mismatched headr (expected) '"upper(c2x(__PDSheadr))"'x "
+			call __log 0, "xinit:                  (found)    '"upper(c2x(substr(xbuff,__R1offset,4)))"'x "
+			__skip = 1
+			return
+		end
+		r1dsorg  = c2x(substr(xbuff, __R1offset+4 ,2))
+		r1blksz  = c2d(substr(xbuff, __R1offset+6 ,2))
+		r1lrecl  = c2d(substr(xbuff, __R1offset+8 ,2))
+		LRECL    = c2d(substr(xbuff, __R1offset+8 ,2))
+		r1recfm  = c2x(substr(xbuff, __R1offset+10,2))
+		r1tblksz = c2x(substr(xbuff, __R1offset+14,2))
+		r1devtyp = c2x(substr(xbuff, __R1offset+16,20))
+		TRKSXCYL = c2d(substr(xbuff, __R1offset+26,2))
+
+		/* get a data buffer for the next stage */
+		xbuff	= xfget(fxmit)
+
+		/* IEBCOPY secnd control record */	
+		__R2offset 	= 2
+		deb_ptr		= __R2offset
+		deb_count	= c2d(substr(xbuff, deb_ptr, 1))
+		deb_reltrk	= 0
+		do  i = 1 to deb_count
+			deb_ptr		= deb_ptr + 16
+			deb_start	= c2d(substr(xbuff, deb_ptr+6 ,2)) * trksxcyl  + c2d(substr(xbuff, deb_ptr+8 ,2))
+			deb_end		= c2d(substr(xbuff, deb_ptr+10,2)) * trksxcyl  + c2d(substr(xbuff, deb_ptr+12,2))
+			deb_trks	= c2d(substr(xbuff, deb_ptr+14,2))
+
+			deb_size	= deb_end   - deb_start + 1
+
+			if	deb_size \= deb_trks then do
+				call __log 0,"shit oh shit oh debshit"
+				exit
+			end
+
+			deb_tabl.i.1	= deb_start
+			deb_tabl.i.2	= deb_end
+			deb_tabl.i.3	= deb_reltrk
+			deb_tabl.i.4	= deb_reltrk + deb_trks 
+			deb_reltrk		= deb_reltrk + deb_trks  
+		end
+		deb_tabl.0 = deb_count
+
+		if __debug then ,
+		do	i = 1 to deb_tabl.0 
+			say i deb_tabl.i.1 deb_tabl.i.2 deb_tabl.i.3 deb_tabl.i.4
+		end
+
+		/* get a data buffer for the next stage */
+		
+		/* IEBCOPY directory control records */	
+		__R3offset 	= 2
+
+		/* Process PDS directory */
+		do	dir = 1 
+			xbuff = xfget(fxmit)
+			xbuff = substr(xbuff,__R3offset)
+			do while (xbuff \= "")	
+				len = c2d(substr(xbuff,21,2))	
+				parse var xbuff 1 key 23 blk 277 xbuff	
+
+				do ent = 1 while ( blk \= "" )
+					if	length(blk) < 12 then ,
+						leave ent 
+					if	substr(blk,1,8) = "ffffffffffffffff"x then ,
+						leave dir
+					ttr	=  lower(c2x(substr(blk, 9,3)))						
+					flg	=     bitand(substr(blk,12,1),'80'x)
+					udl	= c2d(bitand(substr(blk,12,1),'1F'x))
+
+					if	flg = '00'x then do 
+						__MBR__.ttr = strip(_e2a(substr(blk,1,8)))
+						if __debug then do
+							say "mbr :"left(__MBR__.ttr,8) "ttr :"ttr
+							say "mbr :"left(__MBR__.ttr,8) "ulen:"udl
+						end
+						if 	udl > 99 then do
+							__SPF__.ttr = substr(blk,13,(udl * 2))
+							say left(__MBR__.ttr,8) _spfstats(substr(blk,13,(udl * 2)))
+						end
+					end 
+
+					len = 12 + udl * 2
+					blk = substr(blk,len + 1)
+				end
+			end
+		end
+
+		/* get a data buffer for the next stage */
+		xbuff = xfget(fxmit)
+		return 0
+	end
+	else do
+		call __log 0, "xinit: invalid utilid   :" xfseq inmr02.xfseq.inmutiln
+		__skip = 1
+		return -1
+	end
+	
+return -1
+
+/*- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
+/*                                                                    */
+/*- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
+xopen:
+	mbr		= ""
+	fname   = ""
+	if	inmr02.xfseq.inmutiln = "INMCOPY" then do
+		if	symbol("inmr02."xfseq".inmterm") = "VAR" then do
+			if	_mail_ = "save" then ,
+				fname = lower( path || __MAILfile)
+			else ,
+			if	_mail_ = "name" then ,
+				fname = lower(xname || __MAILsuff)
+			else ,
+			if	_mail_ = "real" then
+				fname = lower(rname || __MAILsuff)
+			else ,
+				return
+		end
+		else ,
+			fname = lower(path || inmr02.xfseq.inmdsnam)
+		
+		if	__extract then do
+			if	stream(fname,"c","open write "REPLACE) \= "READY:" then do
+				call __log 0,  "error opening :"fname
+				call __log 0,  "* * * TREMINATING * * *"
+				exit
+			end
+		end
+		recs	= 0
+		__open	= 1
+		return 
+	end
+	else,
+	if	inmr02.xfseq.inmutiln = "IEBCOPY" then do
+
+		/* MEMBER control data */	
+
+		__R4offset 	= 2
+
+		r4mbrcc	= c2d(substr(xbuff, __R4offset+4,2))
+		r4mbrhh = c2d(substr(xbuff, __R4offset+6,2))
+		r4mbrr  = c2x(substr(xbuff, __R4offset+8,1))
+		trk  	= r4mbrcc * TRKSXCYL  + r4mbrhh
+
+		do	i = 1 to deb_tabl.0
+			if ( trk >= deb_tabl.i.1 ) & ( trk <= deb_tabl.i.2 ) then ,
+				leave
+		end
+
+		ttr 	= lower(right(d2x(trk - deb_tabl.i.1 + deb_tabl.i.3),4,'0') || r4mbrr)
+		mbr 	= lower(strip(__MBR__.ttr))
+		__open	= 1
+		return 
+	end
+	else do
+		call __log 0,"** logic error ** at line 1109"
+		exit 
+	end
+return -99
+
+/*- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
+/*                                                                    */
+/*- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
+xfput:
+	if	inmr02.xfseq.inmutiln = "INMCOPY" then do
+		if	__extract then ,
+			call lineout fname, _e2a(substr(xbuff,2))
+		recs = recs + 1
+		return
+	end
+	else ,
+	if	inmr02.xfseq.inmutiln = "IEBCOPY" then do
+		xoffs = 2
+		if 	inmr02.xfseq.inmrecfm = "F" then do
+			do while xoffs < length(xbuff)
+				blksz = c2d(substr(xbuff,xoffs+10,2))
+				if blksz = 0 then do
+					if	__extract & ,
+					 	fname \= "" then ,
+						call stream fname, "c", "close " 
+					call __log 0, left(mbr,15)"records("right(recs,8)") file("fname")"  
+					__open = 0
+					mbr   = ""
+					fname = ""
+					recs  = 0
+					leave
+				end
+
+				xoffs = xoffs + 12
+				do 	blksz % LRECL
+					if __extract then do
+						if  fname = "" then do
+							if _mode_ = "auto" then do
+								if	substr(xbuff,xoffs+1,7) = __XMIheadr then do
+									_suff_ = __XMIsuffx
+									_asis_ = 1				
+								end
+								else ,
+								if	substr(xbuff,xoffs,4) = __ESDheadr | ,
+									substr(xbuff,xoffs,4) = __TXTheadr | ,
+									substr(xbuff,xoffs,4) = __RLDheadr then do
+									_suff_ = __OBJsuffx
+									_asis_ = 1				
+								end
+								else do
+									_suff_ = __TXTsuffx
+									_asis_ = 0				
+								end	
+							end
+							fname = lower(path || mbr || _suff_)
+
+							if	stream(fname,"c","open write "REPLACE) \= "READY:" then do
+								call __log 0,  "error opening :"fname "for :"mbr 
+								call __log 0,  "* * * TREMINATING * * *"
+								exit
+							end
+							recs  = 0
+						end
+						if _asis_ then ,
+							call charout fname, substr(xbuff,xoffs,LRECL)
+						else ,
+							call lineout fname, _e2a(substr(xbuff,xoffs,LRECL))
+					end
+					recs  = recs  + 1
+					xoffs = xoffs + LRECL
+				end
+			end
+			return 0
+		end
+		else ,
+		if inmr02.xfseq.inmrecfm = "V" then do
+			do while xoffs < length(xbuff)
+				blksz = c2d(substr(xbuff,xoffs+10,2))
+				if blksz = 0 then do
+					if	__extract & ,
+					 	fname \= "" then ,
+						call stream fname, "c", "close " 
+					call __log 0, left(mbr,15)"records("right(recs,8)") file("fname")"  
+					__open = 0
+					mbr   = ""
+					fname = ""
+					recs  = 0
+					leave
+				end
+
+				xoffs 	= xoffs + 12
+				r3limit = xoffs + c2d(substr(xbuff,xoffs,2))
+				xoffs 	= xoffs + 4 
+				do while ( xoffs < r3limit)
+					LRECL = c2d(substr(xbuff,xoffs,2))
+					if	__extract then do
+						if  fname = "" then do							
+							fname = lower(path || mbr || _suff_)
+							if	stream(fname,"c","open write "REPLACE) \= "READY:" then do
+								call __log 0,  "error opening :"fname "for :"mbr 
+								call __log 0,  "* * * TREMINATING * * *"
+								exit
+							end
+							recs  = 0
+						end
+						call lineout fname, _e2a(substr(xbuff,xoffs+4,LRECL-4))
+					end					
+					recs  = recs  + 1
+					xoffs = xoffs + LRECL
+				end
+			end
+			return 0
+		end
+		else do
+			call __log 0,"** logic error ** at line 1221"
+			exit  
+		end
+	end
+	else do
+		call __log 0,"** logic error ** at line 1226"
+		exit  
+	end
+
+return -99
