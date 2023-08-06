@@ -1,0 +1,27 @@
+/*Rexx- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
+/* Name: _spfstats													  */
+/* Date: November 10, 2008                                            */
+/*- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
+/* Copyright (c) 2008, Enrico Sorichetti                              */
+/* All rights reserved.                                               */
+/* Full text of license in "license.txt"                              */     
+/*- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
+_spfstats:
+	stats = arg(1)
+  	Parse 	Var stats ISPver 2 ISPlev 3 . 5 ISPcre1 6 ISPcre2,
+				    9 ISPmod1 10 ISPmod2 13 ISPhh 14 ISPmm,
+    			   15 ISPctr1 17 ISPctr2 19 . 21 ISPuser 28 .
+	stats = " * "
+  	stats = stats || "*" || right(c2d(ISPver),2,"0")
+  	stats = stats || "*" || right(c2d(ISPlev),2,"0")
+  	stats = stats || "*" || right(c2d(ISPctr1),5)
+  	stats = stats || "*" || right(c2d(ISPctr2),5)
+  	stats = stats || "*" || _spfdate(ISPcre1,ISPcre2)
+  	stats = stats || "*" || _spfdate(ISPmod1,ISPmod2)
+  	stats = stats || "*" || right(c2d(ISPhh),2,"0")":"right(c2d(ISPmm),2,"0")
+  	stats = stats || "*" || _e2a(ISPuser)
+ 	Return stats
+_spfdate:
+	parse 	value c2x(arg(2)) with 1 j_year 3 j_days 6 .
+	year 	= 19+c2x(arg(1))j_year
+	return	date("u",j_days+date("B",19+c2x(arg(1))j_year"0101","S")-1,"b")

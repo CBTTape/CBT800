@@ -1,0 +1,10 @@
+2023-08-06 07:39:21.112133 - Initialized conversion of CBT800
+2023-08-06 07:39:21.148601 - Received CBT.V505.FILE800.PDS from FILE800.XMI 
+2023-08-06 07:39:21.151007 - Found $$$#DATE.txt (text/plain) in CBT.V505.FILE800.PDS, moved to PDS/$$$#DATE
+2023-08-06 07:39:21.152015 - Found $$NOTE1.txt (text/plain) in CBT.V505.FILE800.PDS, moved to PDS/$$NOTE1
+2023-08-06 07:39:21.152949 - Found $$NOTE2.txt (text/plain) in CBT.V505.FILE800.PDS, moved to PDS/$$NOTE2
+2023-08-06 07:39:21.153978 - Found @FILE800.txt (text/plain) in CBT.V505.FILE800.PDS, moved to PDS/@FILE800
+2023-08-06 07:39:21.153989 - Found ZIP.zip (application/zip), trying to unzip
+2023-08-06 07:39:21.154231 - Found ZIP.zip (application/zip), extracting to CBT800/ZIP
+2023-08-06 07:39:21.156716 - Found ZIPOLD.zip (application/zip), trying to unzip
+2023-08-06 07:39:21.156843 - Found ZIPOLD.zip (application/zip), extracting to CBT800/ZIPOLD
