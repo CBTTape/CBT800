@@ -1,0 +1,100 @@
+#!/opt/ooRexx/bin/rexx
+/*Rexx- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
+/* Name: ebcview.rx													  */
+/* Date: November 10, 2008                                            */
+/*- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
+/* Copyright (c) 2008, Enrico Sorichetti                              */
+/* All rights reserved.                                               */
+/* Full text of license in "license.txt"                              */     
+/*- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
+                                           
+Trace 	"O"
+offst = 1
+chunk = 80
+fillr = copies(" ",7)
+scale = copies("1234567890",8)
+parse arg __stdargs
+argc = words(args)
+if	argc = 0 then do
+	say "You need to specify a filename "
+	exit
+end
+
+args = ""
+do	iarg = 1 to argc
+	warg = word(__stdargs,iarg)
+	if	wordpos(warg,args) > 0 then ,
+		iterate
+	args = args warg
+end
+args = space(args)
+argc = words(args)
+
+do	iarg = 1 to argc
+	fname = word(args,iarg)
+ 
+	if  stream(fname,"C", "QUERY EXISTS") = ""  then do
+		say "File not found '"|| fname || "' "
+
+		exit 
+	end
+	if	stream(fname, "C", "OPEN READ") \= "READY:" then do
+		say "Open error     '"|| fname || "' "
+		exit 
+	end
+	
+	offst = offst - chunk
+	do	index = 1 while ( chars(fname) > 0 )
+		
+		buffr = charin(fname,,chunk)	
+		offst = offst + chunk
+
+		if	( index // 10 ) = 1 then ,
+		 	say fillr || ">>" || scale || "<<"
+
+		say	left(right(offst,6),7) || ">>" || _e2a(buffr) || "<<"	 
+
+		buffr = c2x(buffr)
+		line0 = ""
+		line1 = ""
+		do	i = 1 to length(buffr) - 1 by 2
+			line0 = line0 || substr(buffr, i    , 1 ) 
+			line1 = line1 || substr(buffr, i + 1, 1 ) 
+		end
+		say fillr || ">>" || line0 || "<<"
+		say fillr || ">>" || line1 || "<<"
+		say
+
+	end
+	call stream fname,"C" ,"CLOSE"
+
+end
+
+exit
+
+/* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
+/* E2A simple EBCdic to ascii for printable                          */
+/* - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - */
+_e2a:
+                            /*0123456789abcdef*/
+   return translate(arg(1), ,
+					/*0*/	 "................" || , 
+					/*1*/	 "................" || ,   
+					/*2*/	 "................" || ,   
+					/*3*/	 "................" || ,   
+					/*4*/	 " ...........<(+." || ,
+					/*5*/	 "&.........!$*);." || ,   
+					/*6*/	 "-/.........,%_>?" || ,    
+					/*7*/	 "..........:#@" || "'" || '="' || , 
+					/*8*/	 ".abcdefghi......" || ,
+					/*9*/	 ".jklmnopqr......" || ,
+					/*a*/	 "..stuvwxyz......" || ,
+					/*b*/	 "..........[]...." || ,
+					/*c*/	 "{ABCDEFGHI......" || ,
+					/*d*/	 "}JKLMNOPQR......" || ,
+					/*e*/	 "\.STUVWXYZ......" || ,
+					/*f*/	 "0123456789......" )
+                            /*0123456789abcdef*/
+return -99
+
+
