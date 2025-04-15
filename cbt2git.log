@@ -1,7 +1,7 @@
-2025-04-13 22:56:46.924027 - Received CBT.V505.FILE800.PDS from FILE800.XMI 
-2025-04-13 22:56:46.924896 - Found $$$#DATE.txt (text/plain) in CBT.V505.FILE800.PDS, moved to PDS/$$$#DATE
-2025-04-13 22:56:46.925013 - Found $$NOTE1.txt (text/plain) in CBT.V505.FILE800.PDS, moved to PDS/$$NOTE1
-2025-04-13 22:56:46.925106 - Found $$NOTE2.txt (text/plain) in CBT.V505.FILE800.PDS, moved to PDS/$$NOTE2
-2025-04-13 22:56:46.925202 - Found @FILE800.txt (text/plain) in CBT.V505.FILE800.PDS, moved to PDS/@FILE800
-2025-04-13 22:56:46.928143 - Found ZIP.zip (application/zip) in CBT.V505.FILE800.PDS, moved to ZIP
-2025-04-13 22:56:46.929764 - Found ZIPOLD.zip (application/zip) in CBT.V505.FILE800.PDS, moved to ZIPOLD
+2025-04-15 05:43:13.932683 - Received CBT.V505.FILE800.PDS from FILE800.XMI 
+2025-04-15 05:43:13.933937 - Found $$$#DATE.txt (text/plain) in CBT.V505.FILE800.PDS, moved to PDS/$$$#DATE
+2025-04-15 05:43:13.934364 - Found $$NOTE1.txt (text/plain) in CBT.V505.FILE800.PDS, moved to PDS/$$NOTE1
+2025-04-15 05:43:13.934754 - Found $$NOTE2.txt (text/plain) in CBT.V505.FILE800.PDS, moved to PDS/$$NOTE2
+2025-04-15 05:43:13.934982 - Found @FILE800.txt (text/plain) in CBT.V505.FILE800.PDS, moved to PDS/@FILE800
+2025-04-15 05:43:13.939112 - Found ZIP.zip (application/zip) in CBT.V505.FILE800.PDS, moved to ZIP
+2025-04-15 05:43:13.941647 - Found ZIPOLD.zip (application/zip) in CBT.V505.FILE800.PDS, moved to ZIPOLD
